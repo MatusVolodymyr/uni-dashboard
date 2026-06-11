@@ -4,4 +4,10 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "matplotlib>=3.10.9",
+    "pandas>=3.0.3",
+    "plotly>=6.8.0",
+    "pyarrow>=24.0.0",
+    "streamlit>=1.58.0",
+]
