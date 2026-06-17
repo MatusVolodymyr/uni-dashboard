@@ -196,23 +196,29 @@ def score_distribution_bar(scores: pd.Series, title: str = "") -> go.Figure:
     return fig
 
 
-def scatter_risk(df: pd.DataFrame) -> go.Figure:
+def scatter_risk(
+    df: pd.DataFrame,
+    color_col: str = "faculty",
+    color_label: str = "Факультет",
+    title: str = "Курси: обсяг відповідей vs. частка негативних оцінок",
+) -> go.Figure:
     fig = px.scatter(
         df,
         x="n",
         y="low_score_rate",
         size="n",
-        color="faculty",
+        color=color_col,
         hover_data={"course": True, "lecturer": True, "avg_overall": ":.2f", "n": True},
         labels={
             "n": "Кількість відповідей",
             "low_score_rate": "Частка низьких оцінок (≤3)",
-            "faculty": "Факультет",
+            color_col: color_label,
         },
-        title="Курси: обсяг відповідей vs. частка негативних оцінок",
-        height=450,
+        title=title,
+        height=480,
     )
     fig.update_traces(marker=dict(opacity=0.7))
+    fig.update_yaxes(tickformat=".0%")
     fig.update_layout(margin=dict(l=10, r=10, t=50, b=10))
     return fig
 

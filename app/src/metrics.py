@@ -123,19 +123,23 @@ def group_counts(df: pd.DataFrame, group_col: str) -> pd.Series:
     return df.groupby(group_col).size()
 
 
-def _teacher_weighted(df: pd.DataFrame, group_col: str, teacher_col: str, score_col: str) -> pd.Series:
-    """Average of per-teacher averages within each group (every teacher counts once)."""
-    has_teacher = df[df[teacher_col].str.len() > 0]
-    per_teacher = has_teacher.groupby([group_col, teacher_col])[score_col].mean()
+def _teacher_weighted(teachers: pd.DataFrame, group_col: str, role: str, score_col: str) -> pd.Series:
+    """Average of per-teacher averages within each group (every teacher counts once).
+
+    Uses the canonical teacher long-table so co-teachers are counted individually.
+    """
+    sub = teachers[teachers["role"] == role]
+    per_teacher = sub.groupby([group_col, "teacher"])[score_col].mean()
     return per_teacher.groupby(level=0).mean()
 
 
-def group_summary(df: pd.DataFrame, group_col: str = "faculty") -> pd.DataFrame:
+def group_summary(df: pd.DataFrame, group_col: str = "faculty",
+                  teachers: pd.DataFrame = None) -> pd.DataFrame:
     """General summary table grouped by faculty (or department).
 
     Provides BOTH lecturer/practitioner averages:
       *_resp  = response-weighted (each student response counts once)
-      *_tchr  = teacher-weighted  (each teacher counts once)
+      *_tchr  = teacher-weighted  (each canonical teacher counts once) — needs `teachers`
     """
     df = df.copy()
     df["avg_quality"] = df[QUALITY_COLS].mean(axis=1)
@@ -152,14 +156,100 @@ def group_summary(df: pd.DataFrame, group_col: str = "faculty") -> pd.DataFrame:
     if group_col == "faculty":
         out["departments"] = g["specialty"].nunique()
 
-    out["lect_tchr"] = _teacher_weighted(df, group_col, "lecturer", "avg_lecturer")
-    out["pract_tchr"] = _teacher_weighted(df, group_col, "practitioner", "avg_practitioner")
+    if teachers is not None:
+        out["lect_tchr"] = _teacher_weighted(teachers, group_col, "Лектор", "avg_lecturer")
+        out["pract_tchr"] = _teacher_weighted(teachers, group_col, "Практик", "avg_practitioner")
+    else:
+        out["lect_tchr"] = pd.NA
+        out["pract_tchr"] = pd.NA
 
     low = df[df["avg_overall"] <= 3].groupby(group_col).size()
     out["low_rate"] = (low / out["n"] * 100).fillna(0)
     out["comment_rate"] = out["comment_rate"] * 100
 
     return out.reset_index().sort_values("avg_quality")
+
+
+# Role → (block average column, that block's question columns)
+ROLE_CONFIG = {
+    "Лектор": ("avg_lecturer", Q03_COLS),
+    "Практик": ("avg_practitioner", Q05_COLS),
+}
+
+
+def teacher_summary(teachers: pd.DataFrame, role: str, min_n: int = 10,
+                    strength: float = 20.0) -> pd.DataFrame:
+    """Per-canonical-teacher stats for one role (Лектор / Практик).
+
+    Returns n, raw average, Bayesian-shrunk average, low-score rate, faculties,
+    courses, useful-comment count, and the per-question averages for that block.
+    """
+    score_col, qcols = ROLE_CONFIG[role]
+    sub = teachers[teachers["role"] == role]
+    if len(sub) == 0:
+        return pd.DataFrame()
+
+    g = sub.groupby("teacher")
+    out = g.agg(
+        n=(score_col, "count"),
+        avg=(score_col, "mean"),
+        courses=("course", "nunique"),
+        faculties=("faculty", "nunique"),
+        faculty=("faculty", lambda s: s.mode().iloc[0] if len(s) else ""),
+        comment_count=("comment_useful", "sum"),
+    )
+    # per-question means for this block
+    qmeans = g[qcols].mean()
+    out = out.join(qmeans)
+
+    low = sub[sub[score_col] <= 3].groupby("teacher").size()
+    out["low_rate"] = (low / out["n"] * 100).fillna(0)
+
+    prior = sub[score_col].mean()
+    out["shrunk"] = shrunk_mean(out["avg"], out["n"], prior, strength)
+
+    out = out[out["n"] >= min_n].reset_index()
+    return out.sort_values("shrunk", ascending=False)
+
+
+def top_teachers(teachers: pd.DataFrame, role: str, min_n: int = 10, k: int = 10) -> pd.DataFrame:
+    """Top-k teachers of a role by shrunk average."""
+    return teacher_summary(teachers, role, min_n=min_n).head(k)
+
+
+def department_summary(df: pd.DataFrame, min_n: int = 20, strength: float = 20.0) -> pd.DataFrame:
+    """Per-department (faculty + specialty) summary with shrunk quality ranking.
+
+    Keyed by (faculty, specialty) so identically named departments in different
+    faculties stay distinct. Sorted worst-first by shrunk quality.
+    """
+    key = ["faculty", "specialty"]
+    df = df.copy()
+    df["avg_quality"] = df[QUALITY_COLS].mean(axis=1)
+
+    g = df.groupby(key)
+    out = g.agg(
+        n=("avg_overall", "count"),
+        courses=("course", "nunique"),
+        avg_quality=("avg_quality", "mean"),
+        lect_resp=("avg_lecturer", "mean"),
+        pract_resp=("avg_practitioner", "mean"),
+        comment_count=("comment_useful", "sum"),
+    ).reset_index()
+
+    prior = df["avg_quality"].mean()
+    out["shrunk_quality"] = shrunk_mean(out["avg_quality"], out["n"], prior, strength)
+
+    low = df[df["avg_overall"] <= 3].groupby(key).size().reset_index(name="low_n")
+    out = out.merge(low, on=key, how="left")
+    out["low_n"] = out["low_n"].fillna(0)
+    out["low_rate"] = out["low_n"] / out["n"] * 100
+
+    qm = df.groupby(key)[QUALITY_COLS].mean()
+    out["weakest_question"] = qm.idxmin(axis=1).map(QUESTION_LABELS).values
+
+    out = out[out["n"] >= min_n].copy()
+    return out.sort_values("shrunk_quality")
 
 
 def faculty_counts(df: pd.DataFrame) -> pd.Series:

@@ -4,15 +4,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
 import pandas as pd
-from src.loader import load
+from src.loader import load, load_teachers
 from src.metrics import (
     SCORE_COLS, Q01_COLS, Q03_COLS, Q05_COLS,
     QUESTION_LABELS, group_question_means, group_counts,
-    university_question_means, group_summary,
+    university_question_means, group_summary, course_summary,
 )
-from src.charts import stacked_score_bar, heatmap_faculty_question
+from src.charts import (
+    stacked_score_bar, heatmap_faculty_question, scatter_risk, horizontal_bar_questions,
+)
 from src.access import access_control
 from src.ui import download_csv
+from src.report import build_summary_pdf
 
 st.set_page_config(page_title="Огляд", page_icon="📊", layout="wide")
 st.title("📊 Загальний огляд")
@@ -24,11 +27,14 @@ st.caption(
 
 # Full dataset (for stable baselines) and access-scoped dataset
 df_all = load()
+teachers_all = load_teachers()
 df_full, role, scope_faculty = access_control(df_all)
 is_dean = scope_faculty is not None
-# When a dean is scoped to one faculty, drill structure is by Department (Кафедра)
+# Hierarchy: Факультет → Спеціальність (Кафедра) → Курс.
+# When a dean is scoped to one faculty, drill structure is by Кафедра.
 group_col = "specialty" if is_dean else "faculty"
 group_name = "Кафедра" if is_dean else "Факультет"
+DEPT_LABEL = "Спеціальність (Кафедра)"
 
 # ── Sidebar filters ──────────────────────────────────────────────────────────
 with st.sidebar:
@@ -44,17 +50,20 @@ with st.sidebar:
         specs = ["Всі"] + sorted(scope_df["specialty"].unique())
     else:
         specs = ["Всі"]
-    sel_spec = st.selectbox("Кафедра", specs)
+    sel_spec = st.selectbox(DEPT_LABEL, specs)
 
     block_opts = {"Всі блоки": SCORE_COLS, "Дисципліна": Q01_COLS, "Лектор": Q03_COLS, "Практик": Q05_COLS}
     sel_block = st.selectbox("Блок питань", list(block_opts.keys()))
 
-# Apply filters
+# Apply filters (to both feedback and the canonical teacher table)
 df = df_full.copy()
+teachers_scoped = teachers_all if not is_dean else teachers_all[teachers_all["faculty"] == scope_faculty]
 if sel_faculty != "Всі":
     df = df[df["faculty"] == sel_faculty]
+    teachers_scoped = teachers_scoped[teachers_scoped["faculty"] == sel_faculty]
 if sel_spec != "Всі":
     df = df[df["specialty"] == sel_spec]
+    teachers_scoped = teachers_scoped[teachers_scoped["specialty"] == sel_spec]
 
 active_cols = block_opts[sel_block]
 
@@ -89,7 +98,7 @@ st.caption(
     "11 питаннях якості (без навантаження)."
 )
 
-gs = group_summary(df, group_col=group_col)
+gs = group_summary(df, group_col=group_col, teachers=teachers_scoped)
 cols_order = [group_col, "n"]
 if group_col == "faculty":
     cols_order += ["departments"]
@@ -98,7 +107,8 @@ cols_order += ["courses", "avg_quality",
                "low_rate", "comment_rate"]
 gs_disp = gs[cols_order].copy()
 rename = {
-    group_col: group_name, "n": "Відповідей", "departments": "Кафедр", "courses": "Курсів",
+    group_col: (DEPT_LABEL if is_dean else group_name),
+    "n": "Відповідей", "departments": "Кафедр", "courses": "Курсів",
     "avg_quality": "Якість",
     "lect_resp": "Лектори (за відп.)", "lect_tchr": "Лектори (за викл.)",
     "pract_resp": "Практики (за відп.)", "pract_tchr": "Практики (за викл.)",
@@ -116,7 +126,44 @@ st.dataframe(
     hide_index=True,
     height=min(560, 80 + 36 * len(gs_disp)),
 )
-download_csv(gs_disp, f"general_by_{group_col}.csv", key="dl_general")
+exp1, exp2, _ = st.columns([1.1, 1.1, 4])
+with exp1:
+    download_csv(gs_disp, f"general_by_{group_col}.csv", label="⬇️ Дані (CSV)", key="dl_general")
+with exp2:
+    scope_label = f"Факультет: {scope_faculty}" if is_dean else "Університет (усі факультети)"
+    if st.button("📄 Сформувати PDF-звіт", help="Зведений звіт із графіками та таблицями для друку / розсилки."):
+        with st.spinner("Формуємо звіт…"):
+            pdf_bytes = build_summary_pdf(df_full, scope_label, group_col, group_name, role)
+        st.session_state["overview_pdf"] = pdf_bytes
+if st.session_state.get("overview_pdf"):
+    st.download_button(
+        "⬇️ Завантажити PDF-звіт",
+        data=st.session_state["overview_pdf"],
+        file_name=f"zvedenyi_zvit_{'kafedry' if is_dean else 'universytet'}.pdf",
+        mime="application/pdf",
+        key="dl_pdf",
+    )
+
+st.divider()
+
+# ── Risk scatter: all courses at a glance ────────────────────────────────────
+st.subheader("Огляд ризику: курси")
+st.caption(
+    "Кожна точка — курс. По горизонталі — кількість відповідей, по вертикалі — частка "
+    "низьких оцінок (≤3); розмір точки теж відображає обсяг. **Найбільшої уваги "
+    "потребують курси праворуч угорі**: багато відповідей і водночас багато негативу "
+    "(це вже не випадковість). Точки внизу — благополучні курси; ліворуч — курси з малою "
+    f"вибіркою. Колір — {group_name.lower()}."
+)
+scatter_min = st.slider("Мін. відповідей на курс (для графіка)", 5, 50, 10, 5, key="scatter_min")
+scat = course_summary(df, min_n=scatter_min)
+if len(scat):
+    st.plotly_chart(
+        scatter_risk(scat, color_col=group_col, color_label=group_name),
+        width="stretch",
+    )
+else:
+    st.info("Недостатньо курсів за поточного порогу — зменшіть мінімум відповідей.")
 
 st.divider()
 
@@ -183,6 +230,21 @@ with col_right:
         margin=dict(l=10, r=10, t=10, b=10),
     )
     st.plotly_chart(fig_blocks, width='stretch')
+
+st.divider()
+
+# ── Average per question topic ───────────────────────────────────────────────
+st.subheader("Середні оцінки за темами питань")
+st.caption(
+    "Середня оцінка по кожному з 12 питань (за поточних фільтрів), від найслабшого до "
+    "найсильнішого. Показує, які саме аспекти навчання просідають по всій вибірці — "
+    "напр. «Навантаження» та «Матеріали Elearn» зазвичай нижчі за «Етику лектора»."
+)
+q_means = df[SCORE_COLS].mean()
+st.plotly_chart(
+    horizontal_bar_questions(q_means, QUESTION_LABELS, title=""),
+    width="stretch",
+)
 
 st.divider()
 

@@ -37,7 +37,7 @@ with st.sidebar:
         specs = ["Всі"] + sorted(df_full[df_full["faculty"] == sel_faculty]["specialty"].unique())
     else:
         specs = ["Всі"]
-    sel_spec = st.selectbox("Кафедра", specs)
+    sel_spec = st.selectbox("Спеціальність (Кафедра)", specs)
 
     min_n = st.slider("Мін. відповідей на курс", 5, 50, 20, 5)
 
@@ -115,7 +115,11 @@ with tab2:
     st.caption("Кожна точка — курс. По горизонталі — кількість відповідей, по вертикалі — "
                "частка низьких оцінок (≤3). Цікаві курси — **праворуч вгорі**: багато відповідей "
                "і водночас багато негативу (це не випадковість).")
-    st.plotly_chart(scatter_risk(summary), width='stretch')
+    if df["faculty"].nunique() == 1:
+        st.plotly_chart(scatter_risk(summary, color_col="specialty", color_label="Кафедра"),
+                        width='stretch')
+    else:
+        st.plotly_chart(scatter_risk(summary), width='stretch')
 
 with tab3:
     st.caption("Площа прямокутника — кількість відповідей. Показує, де зосереджений обсяг "

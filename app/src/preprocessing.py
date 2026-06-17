@@ -6,8 +6,12 @@ import re
 import pandas as pd
 from pathlib import Path
 
-RAW_CSV = Path(__file__).parent.parent / "data" / "_.csv"
+from .names import build_canonical_map, canonical_names
+
+# Single source of truth: the CSV at the project root (the file you edit).
+RAW_CSV = Path(__file__).parent.parent.parent / "_.csv"
 PARQUET = Path(__file__).parent.parent / "data" / "feedback.parquet"
+TEACHERS_PARQUET = Path(__file__).parent.parent / "data" / "teachers.parquet"
 
 SCORE_COLS = {
     "Q01_profession":   "Q01_Дисципліна в цілому->Оцініть, як допоміг Вам курс дисципліни краще зрозуміти майбутню професію.",
@@ -165,8 +169,36 @@ def run():
     for col in theme_cols:
         df[col] = tags[col] & df["comment_useful"]
 
+    # ── Teacher name canonicalization ─────────────────────────────────────────
+    # Build one corpus-wide map from both lecturer and practitioner columns,
+    # then resolve each cell to a deduplicated list of canonical names.
+    all_cells = pd.concat([df["lecturer"], df["practitioner"]]).tolist()
+    cmap = build_canonical_map(all_cells)
+
+    lec_lists = df["lecturer"].apply(lambda c: canonical_names(c, cmap))
+    prac_lists = df["practitioner"].apply(lambda c: canonical_names(c, cmap))
+    # Cleaned display strings on the feedback table (co-teachers joined)
+    df["lecturer"] = lec_lists.apply(lambda lst: "; ".join(lst))
+    df["practitioner"] = prac_lists.apply(lambda lst: "; ".join(lst))
+
     df.to_parquet(PARQUET, index=False)
     print(f"Saved {len(df):,} rows → {PARQUET}")
+
+    # ── Teacher long-table (one row per response × canonical teacher) ─────────
+    base_cols = (["response_id", "faculty", "specialty", "course"] + score_keys +
+                 ["avg_lecturer", "avg_practitioner", "avg_overall",
+                  "comment", "comment_useful", "sentiment"])
+    parts = []
+    for role, lists in (("Лектор", lec_lists), ("Практик", prac_lists)):
+        sub = df[base_cols].copy()
+        sub["teacher"] = lists.values
+        sub = sub.explode("teacher")
+        sub = sub[sub["teacher"].notna() & (sub["teacher"].astype(str).str.len() > 0)]
+        sub["role"] = role
+        parts.append(sub)
+    teachers = pd.concat(parts, ignore_index=True)
+    teachers.to_parquet(TEACHERS_PARQUET, index=False)
+    print(f"Saved {len(teachers):,} teacher-rows ({teachers['teacher'].nunique():,} identities) → {TEACHERS_PARQUET}")
     return df
 
 
