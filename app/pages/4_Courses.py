@@ -37,7 +37,7 @@ with fc2:
         specs = ["Всі"] + sorted(df_full[df_full["faculty"] == sel_faculty]["specialty"].unique())
     else:
         specs = ["Всі"]
-    sel_spec = st.selectbox("Спеціальність (Кафедра)", specs)
+    sel_spec = st.selectbox("Спеціальність", specs)
 with fc3:
     min_n = st.slider("Мін. відповідей на курс", 5, 50, 20, 5)
 
@@ -81,7 +81,7 @@ with tab1:
 
     disp_table = disp_table.rename(columns={
         "faculty": "Факультет",
-        "specialty": "Кафедра",
+        "specialty": "Спеціальність",
         "course": "Курс",
         "lecturer": "Лектор",
         "practitioner": "Практик",
@@ -116,7 +116,7 @@ with tab2:
                "частка низьких оцінок (≤3). Цікаві курси — **праворуч вгорі**: багато відповідей "
                "і водночас багато негативу (це не випадковість).")
     if df["faculty"].nunique() == 1:
-        st.plotly_chart(scatter_risk(summary, color_col="specialty", color_label="Кафедра"),
+        st.plotly_chart(scatter_risk(summary, color_col="specialty", color_label="Спеціальність"),
                         width='stretch')
     else:
         st.plotly_chart(scatter_risk(summary), width='stretch')

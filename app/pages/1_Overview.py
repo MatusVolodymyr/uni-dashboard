@@ -30,10 +30,10 @@ df_all = load()
 teachers_all = load_teachers()
 df_full, role, scope_faculty = access_control(df_all)
 is_dean = scope_faculty is not None
-# Hierarchy: Факультет → Спеціальність (Кафедра) → Курс.
-# When a dean is scoped to one faculty, drill structure is by Кафедра.
+# Hierarchy: Факультет → Спеціальність → Курс.
+# When a dean is scoped to one faculty, drill structure is by Спеціальність.
 group_col = "specialty" if is_dean else "faculty"
-group_name = "Кафедра" if is_dean else "Факультет"
+group_name = "Спеціальність" if is_dean else "Факультет"
 DEPT_LABEL = "Спеціальність"
 
 # ── Page controls ────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ k1, k2, k3, k4, k5, k6 = st.columns(6)
 k1.metric("Відповідей", f"{len(df):,}")
 k2.metric("Курсів", f"{df['course'].nunique():,}")
 if is_dean:
-    k3.metric("Кафедр", f"{df['specialty'].nunique():,}")
+    k3.metric("Спеціальностей", f"{df['specialty'].nunique():,}")
 else:
     k3.metric("Факультетів", f"{df['faculty'].nunique():,}")
 k4.metric("Середня оцінка", f"{avg:.2f}")
@@ -106,7 +106,7 @@ cols_order += ["courses", "avg_quality",
 gs_disp = gs[cols_order].copy()
 rename = {
     group_col: (DEPT_LABEL if is_dean else group_name),
-    "n": "Відповідей", "departments": "Кафедр", "courses": "Курсів",
+    "n": "Відповідей", "departments": "Спеціальностей", "courses": "Курсів",
     "avg_quality": "Якість",
     "lect_resp": "Лектори (за відп.)", "lect_tchr": "Лектори (за викл.)",
     "pract_resp": "Практики (за відп.)", "pract_tchr": "Практики (за викл.)",
@@ -140,7 +140,7 @@ if st.session_state.get("overview_pdf"):
     st.download_button(
         "⬇️ Завантажити PDF-звіт",
         data=st.session_state["overview_pdf"],
-        file_name=f"zvedenyi_zvit_{'kafedry' if is_dean else 'universytet'}.pdf",
+        file_name=f"zvedenyi_zvit_{'specialnist' if is_dean else 'universytet'}.pdf",
         mime="application/pdf",
         key="dl_pdf",
     )
@@ -263,7 +263,7 @@ with hcol2:
     )
 mode = "deviation" if heat_mode.startswith("Відхилення") else "absolute"
 
-row_word = group_name.lower() + ("и" if not is_dean else "")  # "факультети" / "кафедра"
+row_word = "факультети" if not is_dean else "спеціальності"
 if mode == "deviation":
     st.caption(
         f"Рядки — {row_word} (n = кількість відповідей), колонки — 12 питань. "

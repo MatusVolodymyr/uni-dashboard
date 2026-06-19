@@ -21,16 +21,16 @@ is_dean = scope_faculty is not None
 #   rector → faculties (baseline = university)
 #   dean   → departments within their faculty (baseline = the faculty)
 group_col = "specialty" if is_dean else "faculty"
-unit = "Кафедра" if is_dean else "Факультет"
-unit_gen = "кафедри" if is_dean else "факультету"        # "n відповідей <unit_gen>"
-unit_loc = "кафедрах" if is_dean else "факультетах"      # "по <unit_loc>"
-unit_acc = "кафедру" if is_dean else "факультет"          # "виберіть <unit_acc>"
+unit = "Спеціальність" if is_dean else "Факультет"
+unit_gen = "спеціальності" if is_dean else "факультету"   # "n відповідей <unit_gen>"
+unit_loc = "спеціальностях" if is_dean else "факультетах"  # "по <unit_loc>"
+unit_acc = "спеціальність" if is_dean else "факультет"     # "виберіть <unit_acc>"
 baseline_name = "факультету" if is_dean else "університету"
 child_col = "course" if is_dean else "specialty"
-child_title = "Курси" if is_dean else "Кафедри"
-child_label = "Курс" if is_dean else "Кафедра"
+child_title = "Курси" if is_dean else "Спеціальності"
+child_label = "Курс" if is_dean else "Спеціальність"
 
-st.title(f"🏫 Аналіз за {'кафедрами' if is_dean else 'факультетами'}")
+st.title(f"🏫 Аналіз за {'спеціальностями' if is_dean else 'факультетами'}")
 st.caption(
     f"Порівняння {unit_loc}" + (f" факультету «{scope_faculty}»" if is_dean else " університету") +
     ". Завжди дивіться на кількість відповідей (n) поруч із середньою: "

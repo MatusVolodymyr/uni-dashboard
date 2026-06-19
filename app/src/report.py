@@ -184,7 +184,7 @@ def build_summary_pdf(df, teachers, scope_label, group_col, group_name,
     df = df.copy()
     df["avg_quality"] = df[QUALITY_COLS].mean(axis=1)
     is_dept = group_col == "specialty"
-    units_word = "кафедрами" if is_dept else "факультетами"
+    units_word = "спеціальностями" if is_dept else "факультетами"
 
     total = len(df)
     all_scores = df[SCORE_COLS].values.flatten()

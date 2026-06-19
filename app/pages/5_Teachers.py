@@ -15,12 +15,7 @@ from src.access import access_control
 
 st.set_page_config(page_title="Викладачі", page_icon="👩‍🏫", layout="wide")
 st.title("👩‍🏫 Аналіз викладачів")
-st.info(
-    "⚠️ Дані — для **підтримки викладачів**, а не «рейтингу ганьби». Імена студенти "
-    "вписували вручну, тож вони **автоматично дедупльовані** (об'єднано різні написання "
-    "та ініціали, розділено співвикладачів). Лектори (Q02) і практики (Q04) рахуються "
-    "**окремо**. Показуються лише викладачі з достатнім n; рейтинг згладжено за обсягом вибірки."
-)
+
 
 # Access scope (faculty lock for deans) comes from the feedback table
 _, role_access, scope_faculty = access_control(load())

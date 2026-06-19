@@ -14,11 +14,11 @@ from src.charts import horizontal_bar_questions
 from src.ui import download_csv, render_comments, explain_shrunk
 from src.access import access_control
 
-st.set_page_config(page_title="Кафедри", page_icon="🏛️", layout="wide")
-st.title("🏛️ Аналіз за кафедрами")
+st.set_page_config(page_title="Спеціальності", page_icon="🏛️", layout="wide")
+st.title("🏛️ Аналіз за спеціальностями")
 st.caption(
-    "Рівень між факультетом і курсом: **Факультет → Спеціальність (Кафедра) → Курс**. "
-    "Тут можна порівняти кафедри по всьому університету та подивитися кожну окремо — "
+    "Рівень між факультетом і курсом: **Факультет → Спеціальність → Курс**. "
+    "Тут можна порівняти спеціальності по всьому університету та подивитися кожну окремо — "
     "її відхилення **і від факультету, і від університету**, курси, викладачів і коментарі."
 )
 
@@ -38,24 +38,24 @@ with fc1:
         sel_faculty = scope_faculty
         st.selectbox("Факультет", [scope_faculty], disabled=True)
 with fc2:
-    min_n = st.slider("Мін. відповідей на кафедру", 5, 100, 20, 5)
+    min_n = st.slider("Мін. відповідей на спеціальність", 5, 100, 20, 5)
 
 df = df_full if sel_faculty in ("Всі", scope_faculty) else df_full[df_full["faculty"] == sel_faculty]
 teachers_scoped = teachers_all if sel_faculty in ("Всі", scope_faculty) else \
     teachers_all[teachers_all["faculty"] == sel_faculty]
 
-tab_rank, tab_drill = st.tabs(["📋 Рейтинг кафедр", "🔍 Профіль кафедри"])
+tab_rank, tab_drill = st.tabs(["📋 Рейтинг спеціальностей", "🔍 Профіль спеціальності"])
 
 # ── University-wide department ranking ───────────────────────────────────────
 with tab_rank:
-    st.subheader(f"Рейтинг кафедр (n ≥ {min_n})")
+    st.subheader(f"Рейтинг спеціальностей (n ≥ {min_n})")
     st.caption("Сортування за **згладженою оцінкою** (поправка на обсяг вибірки). "
-               "«Слабке питання» — найнижча з 11 тем якості для кафедри.")
+               "«Слабке питання» — найнижча з 11 тем якості для спеціальності.")
     explain_shrunk()
 
     ds = department_summary(df, min_n=min_n)
     if len(ds) == 0:
-        st.warning("Жодна кафедра не має достатньо відповідей. Зменшіть поріг.")
+        st.warning("Жодна спеціальність не має достатньо відповідей. Зменшіть поріг.")
     else:
         disp = ds[["faculty", "specialty", "n", "courses", "shrunk_quality",
                    "avg_quality", "low_rate", "weakest_question", "comment_count"]].copy()
@@ -64,7 +64,7 @@ with tab_rank:
         disp["low_rate"] = disp["low_rate"].round(1)
         disp["comment_count"] = disp["comment_count"].astype(int)
         disp = disp.rename(columns={
-            "faculty": "Факультет", "specialty": "Спеціальність (Кафедра)",
+            "faculty": "Факультет", "specialty": "Спеціальність",
             "n": "Відповідей", "courses": "Курсів", "shrunk_quality": "Згладжена",
             "avg_quality": "Сира якість", "low_rate": "% ≤3",
             "weakest_question": "Слабке питання", "comment_count": "Корисних коментарів",
@@ -87,7 +87,7 @@ with tab_drill:
         st.stop()
     labels = {f"{r.specialty}  ·  {r.faculty}": (r.faculty, r.specialty)
               for r in pairs.itertuples()}
-    sel = st.selectbox("Виберіть кафедру", list(labels.keys()))
+    sel = st.selectbox("Виберіть спеціальність", list(labels.keys()))
     sel_fac, sel_spec = labels[sel]
 
     dept_df = df[(df["faculty"] == sel_fac) & (df["specialty"] == sel_spec)]
@@ -104,9 +104,9 @@ with tab_drill:
     m[4].metric("Корисних коментарів", int(dept_df["comment_useful"].sum()))
 
     # Dual-baseline per-question comparison
-    st.subheader("Профіль за темами: кафедра vs факультет vs університет")
-    st.caption("Стовпчики — середня кафедри по кожному питанню; ромб — середнє по **факультету**, "
-               "коло — середнє по **університету**. Так видно, чи кафедра слабша/сильніша і за свій "
+    st.subheader("Профіль за темами: спеціальність vs факультет vs університет")
+    st.caption("Стовпчики — середня спеціальності по кожному питанню; ромб — середнє по **факультету**, "
+               "коло — середнє по **університету**. Так видно, чи спеціальність слабша/сильніша і за свій "
                "факультет, і за загальноуніверситетський рівень.")
     q_dept = dept_df[SCORE_COLS].mean().rename(QUESTION_LABELS)
     q_fac = fac_df[SCORE_COLS].mean().rename(QUESTION_LABELS)
@@ -115,7 +115,7 @@ with tab_drill:
 
     fig = go.Figure()
     fig.add_trace(go.Bar(x=q_dept[order].values, y=order, orientation="h",
-                         name="Кафедра", marker_color="#1f77b4"))
+                         name="Спеціальність", marker_color="#1f77b4"))
     fig.add_trace(go.Scatter(x=q_fac[order].values, y=order, mode="markers",
                              name="Факультет",
                              marker=dict(color="#ff7f0e", size=10, symbol="diamond")))
@@ -128,7 +128,7 @@ with tab_drill:
     st.plotly_chart(fig, width="stretch")
 
     # Courses of the department
-    st.subheader(f"Курси кафедри — {sel_spec}")
+    st.subheader(f"Курси спеціальності — {sel_spec}")
     cs = course_summary(dept_df, min_n=5)
     if len(cs):
         cdisp = cs[["course", "n", "shrunk_quality", "low_score_rate", "weakest_question"]].copy()
@@ -147,8 +147,8 @@ with tab_drill:
         st.caption("Замало курсів з n ≥ 5 для таблиці.")
 
     # Top teachers of the department (both categories)
-    st.subheader("Викладачі кафедри")
-    st.caption("Найвище оцінені викладачі кафедри (n ≥ 5 на кафедрі), окремо лектори і практики.")
+    st.subheader("Викладачі спеціальності")
+    st.caption("Найвище оцінені викладачі спеціальності (n ≥ 5 на спеціальності), окремо лектори і практики.")
     tcol1, tcol2 = st.columns(2)
 
     def dept_leaderboard(container, role_name):
