@@ -12,16 +12,15 @@ from src.metrics import (
     THEME_LABELS, course_summary,
 )
 from src.charts import scatter_risk, treemap_courses, horizontal_bar_questions, score_distribution_bar
-from src.ui import download_csv, explain_shrunk
+from src.ui import download_csv
 from src.access import access_control
 
 st.set_page_config(page_title="Курси", page_icon="📚", layout="wide")
 st.title("📚 Аналіз курсів")
 st.caption(
     "Мета — знайти **курси, що потребують уваги**, а не скласти «рейтинг ганьби». "
-    "Рейтинг рахується за **згладженою оцінкою** (Bayesian shrinkage): курси з малою "
-    "кількістю відповідей підтягуються до середнього, тож кілька випадкових оцінок не "
-    "виштовхують курс у топ проблемних. Питання «Навантаження» виключене з оцінки якості "
+    "Показуються лише курси з достатньою кількістю відповідей (поріг n нижче). "
+    "Питання «Навантаження» виключене з оцінки якості "
     "(це калібрування «важко/легко», а не якість)."
 )
 
@@ -57,13 +56,11 @@ with tab1:
 
     show_mode = st.radio(
         "Сортування",
-        ["Згладжена оцінка (рекомендовано)", "Сира середня", "Найвища частка ≤3", "Найбільше відповідей"],
+        ["Середня оцінка (від найнижчої)", "Найвища частка ≤3", "Найбільше відповідей"],
         horizontal=True,
     )
 
-    if show_mode.startswith("Згладжена"):
-        disp = summary.sort_values("shrunk_quality")
-    elif show_mode == "Сира середня":
+    if show_mode.startswith("Середня"):
         disp = summary.sort_values("avg_quality")
     elif show_mode == "Найвища частка ≤3":
         disp = summary.sort_values("low_score_rate", ascending=False)
@@ -71,11 +68,11 @@ with tab1:
         disp = summary.sort_values("n", ascending=False)
 
     disp_table = disp[[
-        "faculty", "specialty", "course", "n", "shrunk_quality", "avg_quality", "avg_workload",
+        "faculty", "specialty", "course", "n", "avg_quality", "avg_workload",
         "low_score_rate", "lecturer", "practitioner", "weakest_question", "comment_count"
     ]].copy()
     disp_table["low_score_rate"] = (disp_table["low_score_rate"] * 100).round(1)
-    for c in ("shrunk_quality", "avg_quality", "avg_workload"):
+    for c in ("avg_quality", "avg_workload"):
         disp_table[c] = disp_table[c].round(2)
     disp_table["comment_count"] = disp_table["comment_count"].astype(int)
 
@@ -86,25 +83,22 @@ with tab1:
         "lecturer": "Лектор",
         "practitioner": "Практик",
         "n": "n",
-        "shrunk_quality": "Згладжена",
-        "avg_quality": "Сира якість",
+        "avg_quality": "Якість",
         "avg_workload": "Навантаження",
         "low_score_rate": "% ≤3",
         "weakest_question": "Слабке питання",
         "comment_count": "Корисних коментарів",
     })
 
-    st.caption("**Згладжена** — рейтингова оцінка з поправкою на n. **Сира якість** — проста "
-               "середня по 11 питаннях якості (без навантаження). **Навантаження** — окремо, "
-               "низьке = курс сприймається як важкий. **% ≤3** — частка відповідей із середньою ≤3.")
-    explain_shrunk()
+    st.caption("**Якість** — середня по 11 питаннях якості (без навантаження). "
+               "**Навантаження** — окремо, низьке = курс сприймається як важкий. "
+               "**% ≤3** — частка відповідей із середньою ≤3.")
     st.dataframe(
         disp_table.style.background_gradient(
-            subset=["Згладжена", "Сира якість"], cmap="RdYlGn", vmin=1, vmax=5
+            subset=["Якість"], cmap="RdYlGn", vmin=1, vmax=5
         ).background_gradient(
             subset=["% ≤3"], cmap="YlOrRd", vmin=0, vmax=30
-        ).format({"Згладжена": "{:.2f}", "Сира якість": "{:.2f}",
-                  "Навантаження": "{:.2f}", "% ≤3": "{:.1f}%"}),
+        ).format({"Якість": "{:.2f}", "Навантаження": "{:.2f}", "% ≤3": "{:.1f}%"}),
         width='stretch',
         height=500,
         hide_index=True,

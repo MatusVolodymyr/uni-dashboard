@@ -44,15 +44,6 @@ THEME_LABELS = {
 }
 
 
-def shrunk_mean(mean: pd.Series, n: pd.Series, prior: float, strength: float = 20.0) -> pd.Series:
-    """Empirical-Bayes shrinkage toward a prior mean.
-
-    A group with few responses is pulled toward `prior`; a large group keeps its
-    own mean. `strength` is the pseudo-count (how many prior observations to add).
-    """
-    return (n * mean + strength * prior) / (n + strength)
-
-
 def score_dist(series: pd.Series) -> dict[int, int]:
     counts = series.value_counts().reindex(range(1, 6), fill_value=0)
     return counts.to_dict()
@@ -72,7 +63,7 @@ def top_box_rate(series: pd.Series) -> float:
     return (valid == 5).sum() / len(valid)
 
 
-def course_summary(df: pd.DataFrame, min_n: int = 20, strength: float = 20.0) -> pd.DataFrame:
+def course_summary(df: pd.DataFrame, min_n: int = 20) -> pd.DataFrame:
     key = ["faculty", "specialty", "course"]
     df = df.copy()
     df["avg_quality"] = df[QUALITY_COLS].mean(axis=1)
@@ -91,10 +82,6 @@ def course_summary(df: pd.DataFrame, min_n: int = 20, strength: float = 20.0) ->
         practitioner=("practitioner", lambda s: s.mode().iloc[0] if len(s) else ""),
     ).reset_index()
 
-    # Bayesian-shrunk quality score for fair ranking across sample sizes
-    prior = df["avg_quality"].mean()
-    agg["shrunk_quality"] = shrunk_mean(agg["avg_quality"], agg["n"], prior, strength)
-
     # low score rate (per-response avg_overall <= 3)
     low_rows = df[df["avg_overall"] <= 3].groupby(key).size().reset_index(name="low_n")
     agg = agg.merge(low_rows, on=key, how="left")
@@ -107,7 +94,7 @@ def course_summary(df: pd.DataFrame, min_n: int = 20, strength: float = 20.0) ->
     agg["weakest_score"] = q_means.min(axis=1).values
 
     agg = agg[agg["n"] >= min_n].copy()
-    return agg.sort_values("shrunk_quality", ascending=True)
+    return agg.sort_values("avg_quality", ascending=True)
 
 
 def faculty_question_heatmap(df: pd.DataFrame) -> pd.DataFrame:
@@ -177,12 +164,11 @@ ROLE_CONFIG = {
 }
 
 
-def teacher_summary(teachers: pd.DataFrame, role: str, min_n: int = 10,
-                    strength: float = 20.0) -> pd.DataFrame:
+def teacher_summary(teachers: pd.DataFrame, role: str, min_n: int = 10) -> pd.DataFrame:
     """Per-canonical-teacher stats for one role (Лектор / Практик).
 
-    Returns n, raw average, Bayesian-shrunk average, low-score rate, faculties,
-    courses, useful-comment count, and the per-question averages for that block.
+    Returns n, average, low-score rate, faculties, courses, useful-comment count,
+    and the per-question averages for that block. Sorted best-first by average.
     """
     score_col, qcols = ROLE_CONFIG[role]
     sub = teachers[teachers["role"] == role]
@@ -205,25 +191,18 @@ def teacher_summary(teachers: pd.DataFrame, role: str, min_n: int = 10,
     low = sub[sub[score_col] <= 3].groupby("teacher").size()
     out["low_rate"] = (low / out["n"] * 100).fillna(0)
 
-    prior = sub[score_col].mean()
-    out["shrunk"] = shrunk_mean(out["avg"], out["n"], prior, strength)
-
     out = out[out["n"] >= min_n].reset_index()
-    return out.sort_values("shrunk", ascending=False)
+    return out.sort_values("avg", ascending=False)
 
 
 def top_teachers(teachers: pd.DataFrame, role: str, min_n: int = 10, k: int = 10) -> pd.DataFrame:
-    """Top-k teachers of a role by shrunk average."""
+    """Top-k teachers of a role by average score (n ≥ min_n)."""
     return teacher_summary(teachers, role, min_n=min_n).head(k)
 
 
 def teacher_question_ranking(teachers: pd.DataFrame, role: str, question_col: str,
-                             min_n: int = 10, strength: float = 20.0) -> pd.DataFrame:
-    """Rank teachers of a role by a SINGLE question topic.
-
-    Each teacher's mean on that one question is Bayesian-shrunk toward the global
-    mean of the same question (so small samples don't top the list). Sorted best-first.
-    """
+                             min_n: int = 10) -> pd.DataFrame:
+    """Rank teachers of a role by a SINGLE question topic (by average, n ≥ min_n)."""
     sub = teachers[teachers["role"] == role]
     if len(sub) == 0:
         return pd.DataFrame()
@@ -234,18 +213,16 @@ def teacher_question_ranking(teachers: pd.DataFrame, role: str, question_col: st
         courses=("course", "nunique"),
         faculty=("faculty", lambda s: s.mode().iloc[0] if len(s) else ""),
     )
-    prior = sub[question_col].mean()
-    out["q_shrunk"] = shrunk_mean(out["q_avg"], out["n"], prior, strength)
     out["low_rate"] = (sub[sub[question_col] <= 3].groupby("teacher").size() / out["n"] * 100).fillna(0)
     out = out[out["n"] >= min_n].reset_index()
-    return out.sort_values("q_shrunk", ascending=False)
+    return out.sort_values("q_avg", ascending=False)
 
 
-def department_summary(df: pd.DataFrame, min_n: int = 20, strength: float = 20.0) -> pd.DataFrame:
-    """Per-department (faculty + specialty) summary with shrunk quality ranking.
+def department_summary(df: pd.DataFrame, min_n: int = 20) -> pd.DataFrame:
+    """Per-department (faculty + specialty) summary, sorted worst-first by avg quality.
 
     Keyed by (faculty, specialty) so identically named departments in different
-    faculties stay distinct. Sorted worst-first by shrunk quality.
+    faculties stay distinct.
     """
     key = ["faculty", "specialty"]
     df = df.copy()
@@ -261,9 +238,6 @@ def department_summary(df: pd.DataFrame, min_n: int = 20, strength: float = 20.0
         comment_count=("comment_useful", "sum"),
     ).reset_index()
 
-    prior = df["avg_quality"].mean()
-    out["shrunk_quality"] = shrunk_mean(out["avg_quality"], out["n"], prior, strength)
-
     low = df[df["avg_overall"] <= 3].groupby(key).size().reset_index(name="low_n")
     out = out.merge(low, on=key, how="left")
     out["low_n"] = out["low_n"].fillna(0)
@@ -273,7 +247,7 @@ def department_summary(df: pd.DataFrame, min_n: int = 20, strength: float = 20.0
     out["weakest_question"] = qm.idxmin(axis=1).map(QUESTION_LABELS).values
 
     out = out[out["n"] >= min_n].copy()
-    return out.sort_values("shrunk_quality")
+    return out.sort_values("avg_quality")
 
 
 def faculty_counts(df: pd.DataFrame) -> pd.Series:

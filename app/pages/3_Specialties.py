@@ -11,7 +11,7 @@ from src.metrics import (
     teacher_summary, top_teachers,
 )
 from src.charts import horizontal_bar_questions
-from src.ui import download_csv, render_comments, explain_shrunk
+from src.ui import download_csv, render_comments
 from src.access import access_control
 
 st.set_page_config(page_title="Спеціальності", page_icon="🏛️", layout="wide")
@@ -49,31 +49,28 @@ tab_rank, tab_drill = st.tabs(["📋 Рейтинг спеціальностей
 # ── University-wide department ranking ───────────────────────────────────────
 with tab_rank:
     st.subheader(f"Рейтинг спеціальностей (n ≥ {min_n})")
-    st.caption("Сортування за **згладженою оцінкою** (поправка на обсяг вибірки). "
+    st.caption("Сортування за **середньою оцінкою якості** (від найнижчої). "
                "«Слабке питання» — найнижча з 11 тем якості для спеціальності.")
-    explain_shrunk()
 
     ds = department_summary(df, min_n=min_n)
     if len(ds) == 0:
         st.warning("Жодна спеціальність не має достатньо відповідей. Зменшіть поріг.")
     else:
-        disp = ds[["faculty", "specialty", "n", "courses", "shrunk_quality",
+        disp = ds[["faculty", "specialty", "n", "courses",
                    "avg_quality", "low_rate", "weakest_question", "comment_count"]].copy()
-        for c in ("shrunk_quality", "avg_quality"):
-            disp[c] = disp[c].round(2)
+        disp["avg_quality"] = disp["avg_quality"].round(2)
         disp["low_rate"] = disp["low_rate"].round(1)
         disp["comment_count"] = disp["comment_count"].astype(int)
         disp = disp.rename(columns={
             "faculty": "Факультет", "specialty": "Спеціальність",
-            "n": "Відповідей", "courses": "Курсів", "shrunk_quality": "Згладжена",
-            "avg_quality": "Сира якість", "low_rate": "% ≤3",
+            "n": "Відповідей", "courses": "Курсів",
+            "avg_quality": "Якість", "low_rate": "% ≤3",
             "weakest_question": "Слабке питання", "comment_count": "Корисних коментарів",
         })
         st.dataframe(
-            disp.style.background_gradient(subset=["Згладжена", "Сира якість"],
-                                           cmap="RdYlGn", vmin=4.0, vmax=5.0)
+            disp.style.background_gradient(subset=["Якість"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
             .background_gradient(subset=["% ≤3"], cmap="YlOrRd", vmin=0, vmax=15)
-            .format({"Згладжена": "{:.2f}", "Сира якість": "{:.2f}", "% ≤3": "{:.1f}%"}),
+            .format({"Якість": "{:.2f}", "% ≤3": "{:.1f}%"}),
             width="stretch", height=520, hide_index=True,
         )
         download_csv(disp, "departments_ranking.csv", key="dl_depts")
@@ -131,16 +128,16 @@ with tab_drill:
     st.subheader(f"Курси спеціальності — {sel_spec}")
     cs = course_summary(dept_df, min_n=5)
     if len(cs):
-        cdisp = cs[["course", "n", "shrunk_quality", "low_score_rate", "weakest_question"]].copy()
-        cdisp["shrunk_quality"] = cdisp["shrunk_quality"].round(2)
+        cdisp = cs[["course", "n", "avg_quality", "low_score_rate", "weakest_question"]].copy()
+        cdisp["avg_quality"] = cdisp["avg_quality"].round(2)
         cdisp["low_score_rate"] = (cdisp["low_score_rate"] * 100).round(1)
         cdisp = cdisp.rename(columns={
-            "course": "Курс", "n": "n", "shrunk_quality": "Згладжена",
+            "course": "Курс", "n": "n", "avg_quality": "Якість",
             "low_score_rate": "% ≤3", "weakest_question": "Слабке питання",
         })
         st.dataframe(
-            cdisp.style.background_gradient(subset=["Згладжена"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
-            .format({"Згладжена": "{:.2f}", "% ≤3": "{:.1f}%"}),
+            cdisp.style.background_gradient(subset=["Якість"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
+            .format({"Якість": "{:.2f}", "% ≤3": "{:.1f}%"}),
             width="stretch", hide_index=True, height=min(360, 80 + 34 * len(cdisp)),
         )
     else:
@@ -158,14 +155,12 @@ with tab_drill:
             if len(top) == 0:
                 st.caption("Немає викладачів з n ≥ 5.")
                 return
-            d = top[["teacher", "n", "shrunk", "avg"]].copy()
-            d["shrunk"] = d["shrunk"].round(2)
+            d = top[["teacher", "n", "avg"]].copy()
             d["avg"] = d["avg"].round(2)
-            d = d.rename(columns={"teacher": "Викладач", "n": "n",
-                                  "shrunk": "Згладжена", "avg": "Сира"})
+            d = d.rename(columns={"teacher": "Викладач", "n": "n", "avg": "Середня"})
             st.dataframe(
-                d.style.background_gradient(subset=["Згладжена"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
-                .format({"Згладжена": "{:.2f}", "Сира": "{:.2f}"}),
+                d.style.background_gradient(subset=["Середня"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
+                .format({"Середня": "{:.2f}"}),
                 width="stretch", hide_index=True,
             )
 

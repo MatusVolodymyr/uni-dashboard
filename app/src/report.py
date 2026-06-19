@@ -244,33 +244,33 @@ def build_summary_pdf(df, teachers, scope_label, group_col, group_name,
         _title(fig, "Курси, що потребують уваги", scope_label)
         courses = course_summary(df, min_n=10)
         _scatter_ax(fig.add_axes([0.09, 0.56, 0.84, 0.34]), courses)
-        top = courses.sort_values("shrunk_quality").head(14)
-        tc = top[["course", group_col, "n", "shrunk_quality", "low_score_rate", "weakest_question"]].copy()
+        top = courses.sort_values("avg_quality").head(14)
+        tc = top[["course", group_col, "n", "avg_quality", "low_score_rate", "weakest_question"]].copy()
         tc["course"] = tc["course"].astype(str).str.slice(0, 34)
         tc[group_col] = tc[group_col].astype(str).str.slice(0, 22)
-        tc["shrunk_quality"] = tc["shrunk_quality"].map(lambda v: f"{v:.2f}")
+        tc["avg_quality"] = tc["avg_quality"].map(lambda v: f"{v:.2f}")
         tc["low_score_rate"] = tc["low_score_rate"].map(lambda v: f"{v*100:.0f}%")
         tc = tc.rename(columns={"course": "Курс", group_col: group_name, "n": "n",
-                                "shrunk_quality": "Згл.", "low_score_rate": "% ≤3",
+                                "avg_quality": "Якість", "low_score_rate": "% ≤3",
                                 "weakest_question": "Слабке питання"})
         _table(fig.add_axes([0.03, 0.05, 0.94, 0.46]), tc,
-               title="Топ-14 за згладженою оцінкою (від найнижчої)", fontsize=6.5)
+               title="Топ-14 за середньою оцінкою якості (від найнижчої)", fontsize=6.5)
         pdf.savefig(fig); plt.close(fig)
 
         # ── Page 4: Викладачі ─────────────────────────────────────────────────
         fig = plt.figure(figsize=A4)
         _title(fig, "Найвище оцінені викладачі", scope_label)
-        fig.text(0.05, 0.91, "Топ за згладженою оцінкою (поправка на обсяг вибірки), n ≥ 10. "
+        fig.text(0.05, 0.91, "Топ за середньою оцінкою, n ≥ 10. "
                  "Лектори (Q02) і практики (Q04) — окремо.", fontsize=8, color="#666")
 
         def tt_table(role):
             top = top_teachers(teachers, role, min_n=10, k=18)
-            d = top[["teacher", "faculty", "n", "shrunk"]].copy()
+            d = top[["teacher", "faculty", "n", "avg"]].copy()
             d["teacher"] = d["teacher"].astype(str).str.slice(0, 30)
             d["faculty"] = d["faculty"].astype(str).str.slice(0, 20)
-            d["shrunk"] = d["shrunk"].map(lambda v: f"{v:.2f}")
+            d["avg"] = d["avg"].map(lambda v: f"{v:.2f}")
             return d.rename(columns={"teacher": "Викладач", "faculty": "Факультет",
-                                     "n": "n", "shrunk": "Згл."})
+                                     "n": "n", "avg": "Середня"})
         _table(fig.add_axes([0.03, 0.06, 0.45, 0.82]), tt_table("Лектор"),
                title="Лектори", fontsize=6, first_col_w=0.46)
         _table(fig.add_axes([0.52, 0.06, 0.45, 0.82]), tt_table("Практик"),
@@ -321,8 +321,8 @@ def build_summary_pdf(df, teachers, scope_label, group_col, group_name,
             "тому використовуємо розподіл, частку ≤3 і відхилення від середнього.",
             "Імена викладачів студенти вписували вручну — автоматично дедупльовані "
             "(консервативно: прізвище + ініціали); рідкісні неоднозначні написання можуть лишатися окремо.",
-            "Багато курсів мають малу вибірку; рейтинги згладжені (Bayesian shrinkage), "
-            "щоб випадкові оцінки не викривляли висновки.",
+            "Багато курсів і викладачів мають малу вибірку; у рейтингах показуються лише "
+            "ті, хто має достатню кількість відповідей (поріг n).",
             "Питання «Навантаження» — це калібрування (важко/легко), не якість; "
             "виключене з оцінки якості.",
             "Тональність коментарів визначається за середньою оцінкою відповіді (проксі), не NLP.",

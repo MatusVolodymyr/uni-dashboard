@@ -10,7 +10,7 @@ from src.metrics import (
     QUESTION_LABELS, ROLE_CONFIG, teacher_summary, top_teachers, teacher_question_ranking,
 )
 from src.charts import horizontal_bar_questions, score_distribution_bar
-from src.ui import download_csv, render_comments, explain_shrunk
+from src.ui import download_csv, render_comments
 from src.access import access_control
 
 st.set_page_config(page_title="Викладачі", page_icon="👩‍🏫", layout="wide")
@@ -43,8 +43,7 @@ tab_top, tab_rank, tab_byq, tab_profile = st.tabs(
 
 # ── Leaderboards: top-rated for each category ────────────────────────────────
 with tab_top:
-    st.caption(f"Найвище оцінені викладачі кожної категорії (n ≥ {min_n}), за згладженою оцінкою.")
-    explain_shrunk()
+    st.caption(f"Найвище оцінені викладачі кожної категорії (n ≥ {min_n}), за середньою оцінкою.")
 
     def leaderboard(role_name):
         top = top_teachers(tdf, role_name, min_n=min_n, k=10)
@@ -52,14 +51,13 @@ with tab_top:
         if len(top) == 0:
             st.info("Немає викладачів із достатнім n.")
             return
-        d = top[["teacher", "faculty", "n", "shrunk", "avg"]].copy()
-        d["shrunk"] = d["shrunk"].round(2)
+        d = top[["teacher", "faculty", "n", "avg"]].copy()
         d["avg"] = d["avg"].round(2)
         d = d.rename(columns={"teacher": "Викладач", "faculty": "Факультет",
-                              "n": "n", "shrunk": "Згладжена", "avg": "Сира"})
+                              "n": "n", "avg": "Середня"})
         st.dataframe(
-            d.style.background_gradient(subset=["Згладжена"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
-            .format({"Згладжена": "{:.2f}", "Сира": "{:.2f}"}),
+            d.style.background_gradient(subset=["Середня"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
+            .format({"Середня": "{:.2f}"}),
             width="stretch", hide_index=True,
         )
 
@@ -78,39 +76,37 @@ with tab_rank:
         col_low, col_high = st.columns(2)
 
         def mini(data, title):
-            d = data[["teacher", "faculty", "n", "shrunk", "avg"]].copy()
-            d["shrunk"] = d["shrunk"].round(2)
+            d = data[["teacher", "faculty", "n", "avg"]].copy()
             d["avg"] = d["avg"].round(2)
             d = d.rename(columns={"teacher": "Викладач", "faculty": "Факультет",
-                                  "n": "n", "shrunk": "Згладжена", "avg": "Сира"})
+                                  "n": "n", "avg": "Середня"})
             st.markdown(f"**{title}**")
             st.dataframe(
-                d.style.background_gradient(subset=["Згладжена"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
-                .format({"Згладжена": "{:.2f}", "Сира": "{:.2f}"}),
+                d.style.background_gradient(subset=["Середня"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
+                .format({"Середня": "{:.2f}"}),
                 width="stretch", hide_index=True,
             )
 
         with col_low:
-            mini(summary.tail(15).sort_values("shrunk"), f"Потребують уваги — {teacher_type.lower()}и")
+            mini(summary.tail(15).sort_values("avg"), f"Потребують уваги — {teacher_type.lower()}и")
         with col_high:
             mini(summary.head(15), f"Найвищі оцінки — {teacher_type.lower()}и")
 
         st.divider()
         full = summary[["teacher", "faculty", "faculties", "n", "courses",
-                        "shrunk", "avg", "low_rate", "comment_count"]].copy()
-        for c in ("shrunk", "avg"):
-            full[c] = full[c].round(2)
+                        "avg", "low_rate", "comment_count"]].copy()
+        full["avg"] = full["avg"].round(2)
         full["low_rate"] = full["low_rate"].round(1)
         full["comment_count"] = full["comment_count"].astype(int)
         full = full.rename(columns={
             "teacher": "Викладач", "faculty": "Осн. факультет", "faculties": "К-сть фак.",
-            "n": "Відповідей", "courses": "Курсів", "shrunk": "Згладжена",
-            "avg": "Сира середня", "low_rate": "% ≤3", "comment_count": "Корисних коментарів",
+            "n": "Відповідей", "courses": "Курсів",
+            "avg": "Середня оцінка", "low_rate": "% ≤3", "comment_count": "Корисних коментарів",
         })
         st.dataframe(
-            full.style.background_gradient(subset=["Згладжена"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
+            full.style.background_gradient(subset=["Середня оцінка"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
             .background_gradient(subset=["% ≤3"], cmap="YlOrRd", vmin=0, vmax=30)
-            .format({"Згладжена": "{:.2f}", "Сира середня": "{:.2f}", "% ≤3": "{:.1f}%"}),
+            .format({"Середня оцінка": "{:.2f}", "% ≤3": "{:.1f}%"}),
             width="stretch", height=460, hide_index=True,
         )
         download_csv(full, f"teachers_{teacher_type}.csv", key="dl_teachers")
@@ -119,7 +115,7 @@ with tab_rank:
 with tab_byq:
     st.caption(
         f"Рейтинг **{teacher_type.lower()}ів** за окремою темою питання (а не за загальною "
-        f"оцінкою блоку). Оцінка теми згладжена так само, як і загальна (поправка на n ≥ {min_n})."
+        f"оцінкою блоку). Показуються лише викладачі з n ≥ {min_n}."
     )
     q_label_to_col = {QUESTION_LABELS[c]: c for c in qcols}
     sel_qlabel = st.selectbox("Тема питання", list(q_label_to_col.keys()))
@@ -133,29 +129,27 @@ with tab_byq:
         c_best, c_worst = st.columns(2)
 
         def q_table(container, data, title):
-            d = data[["teacher", "faculty", "n", "q_shrunk", "q_avg"]].copy()
-            d["q_shrunk"] = d["q_shrunk"].round(2)
+            d = data[["teacher", "faculty", "n", "q_avg"]].copy()
             d["q_avg"] = d["q_avg"].round(2)
             d = d.rename(columns={"teacher": "Викладач", "faculty": "Факультет", "n": "n",
-                                  "q_shrunk": "Згладжена (тема)", "q_avg": "Сира (тема)"})
+                                  "q_avg": "Середня (тема)"})
             with container:
                 st.markdown(f"**{title}**")
                 st.dataframe(
-                    d.style.background_gradient(subset=["Згладжена (тема)"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
-                    .format({"Згладжена (тема)": "{:.2f}", "Сира (тема)": "{:.2f}"}),
+                    d.style.background_gradient(subset=["Середня (тема)"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
+                    .format({"Середня (тема)": "{:.2f}"}),
                     width="stretch", hide_index=True,
                 )
 
         q_table(c_best, rk.head(15), f"🏅 Найкращі за «{sel_qlabel}»")
-        q_table(c_worst, rk.tail(15).sort_values("q_shrunk"), f"Потребують уваги за «{sel_qlabel}»")
+        q_table(c_worst, rk.tail(15).sort_values("q_avg"), f"Потребують уваги за «{sel_qlabel}»")
 
-        full_q = rk[["teacher", "faculty", "n", "q_shrunk", "q_avg", "low_rate"]].copy()
-        full_q["q_shrunk"] = full_q["q_shrunk"].round(2)
+        full_q = rk[["teacher", "faculty", "n", "q_avg", "low_rate"]].copy()
         full_q["q_avg"] = full_q["q_avg"].round(2)
         full_q["low_rate"] = full_q["low_rate"].round(1)
         full_q = full_q.rename(columns={
             "teacher": "Викладач", "faculty": "Факультет", "n": "Відповідей",
-            "q_shrunk": "Згладжена (тема)", "q_avg": "Сира (тема)", "low_rate": "% ≤3 (тема)",
+            "q_avg": "Середня (тема)", "low_rate": "% ≤3 (тема)",
         })
         download_csv(full_q, f"teachers_{teacher_type}_{qcol}.csv", key="dl_byq")
 
@@ -172,7 +166,7 @@ with tab_profile:
         mc = st.columns(5)
         mc[0].metric("Роль", teacher_type)
         mc[1].metric("Відповідей", int(row["n"]))
-        mc[2].metric("Згладжена", f"{row['shrunk']:.2f}")
+        mc[2].metric("Середня", f"{row['avg']:.2f}")
         mc[3].metric("Оцінок ≤3", f"{row['low_rate']:.1f}%")
         mc[4].metric("Корисних коментарів", int(row["comment_count"]))
 
