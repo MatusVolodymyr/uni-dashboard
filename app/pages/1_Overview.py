@@ -36,23 +36,21 @@ group_col = "specialty" if is_dean else "faculty"
 group_name = "Кафедра" if is_dean else "Факультет"
 DEPT_LABEL = "Спеціальність (Кафедра)"
 
-# ── Sidebar filters ──────────────────────────────────────────────────────────
-with st.sidebar:
-    st.header("Фільтри")
+# ── Page controls ────────────────────────────────────────────────────────────
+block_opts = {"Всі блоки": SCORE_COLS, "Дисципліна": Q01_COLS, "Лектор": Q03_COLS, "Практик": Q05_COLS}
+fc1, fc2, fc3 = st.columns(3)
+with fc1:
     if not is_dean:
         faculties = ["Всі"] + sorted(df_full["faculty"].unique())
         sel_faculty = st.selectbox("Факультет", faculties)
     else:
-        sel_faculty = scope_faculty  # locked by role
-
-    scope_df = df_full if sel_faculty in ("Всі", scope_faculty) else df_full[df_full["faculty"] == sel_faculty]
-    if sel_faculty != "Всі":
-        specs = ["Всі"] + sorted(scope_df["specialty"].unique())
-    else:
-        specs = ["Всі"]
+        sel_faculty = scope_faculty
+        st.selectbox("Факультет", [scope_faculty], disabled=True)
+scope_df = df_full if sel_faculty in ("Всі", scope_faculty) else df_full[df_full["faculty"] == sel_faculty]
+with fc2:
+    specs = (["Всі"] + sorted(scope_df["specialty"].unique())) if sel_faculty != "Всі" else ["Всі"]
     sel_spec = st.selectbox(DEPT_LABEL, specs)
-
-    block_opts = {"Всі блоки": SCORE_COLS, "Дисципліна": Q01_COLS, "Лектор": Q03_COLS, "Практик": Q05_COLS}
+with fc3:
     sel_block = st.selectbox("Блок питань", list(block_opts.keys()))
 
 # Apply filters (to both feedback and the canonical teacher table)
@@ -133,7 +131,10 @@ with exp2:
     scope_label = f"Факультет: {scope_faculty}" if is_dean else "Університет (усі факультети)"
     if st.button("📄 Сформувати PDF-звіт", help="Зведений звіт із графіками та таблицями для друку / розсилки."):
         with st.spinner("Формуємо звіт…"):
-            pdf_bytes = build_summary_pdf(df_full, scope_label, group_col, group_name, role)
+            report_teachers = teachers_all if not is_dean else teachers_all[teachers_all["faculty"] == scope_faculty]
+            uni_means = df_all[SCORE_COLS].mean()
+            pdf_bytes = build_summary_pdf(df_full, report_teachers, scope_label,
+                                          group_col, group_name, role, uni_means)
         st.session_state["overview_pdf"] = pdf_bytes
 if st.session_state.get("overview_pdf"):
     st.download_button(

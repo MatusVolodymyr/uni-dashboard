@@ -29,13 +29,15 @@ teachers_all = load_teachers()
 if is_dean:
     teachers_all = teachers_all[teachers_all["faculty"] == scope_faculty]
 
-with st.sidebar:
-    st.header("Фільтри")
+fc1, fc2 = st.columns(2)
+with fc1:
     if not is_dean:
         faculties = ["Всі"] + sorted(df_full["faculty"].unique())
         sel_faculty = st.selectbox("Факультет", faculties)
     else:
         sel_faculty = scope_faculty
+        st.selectbox("Факультет", [scope_faculty], disabled=True)
+with fc2:
     min_n = st.slider("Мін. відповідей на кафедру", 5, 100, 20, 5)
 
 df = df_full if sel_faculty in ("Всі", scope_faculty) else df_full[df_full["faculty"] == sel_faculty]

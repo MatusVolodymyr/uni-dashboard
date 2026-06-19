@@ -217,6 +217,30 @@ def top_teachers(teachers: pd.DataFrame, role: str, min_n: int = 10, k: int = 10
     return teacher_summary(teachers, role, min_n=min_n).head(k)
 
 
+def teacher_question_ranking(teachers: pd.DataFrame, role: str, question_col: str,
+                             min_n: int = 10, strength: float = 20.0) -> pd.DataFrame:
+    """Rank teachers of a role by a SINGLE question topic.
+
+    Each teacher's mean on that one question is Bayesian-shrunk toward the global
+    mean of the same question (so small samples don't top the list). Sorted best-first.
+    """
+    sub = teachers[teachers["role"] == role]
+    if len(sub) == 0:
+        return pd.DataFrame()
+    g = sub.groupby("teacher")
+    out = g.agg(
+        n=(question_col, "count"),
+        q_avg=(question_col, "mean"),
+        courses=("course", "nunique"),
+        faculty=("faculty", lambda s: s.mode().iloc[0] if len(s) else ""),
+    )
+    prior = sub[question_col].mean()
+    out["q_shrunk"] = shrunk_mean(out["q_avg"], out["n"], prior, strength)
+    out["low_rate"] = (sub[sub[question_col] <= 3].groupby("teacher").size() / out["n"] * 100).fillna(0)
+    out = out[out["n"] >= min_n].reset_index()
+    return out.sort_values("q_shrunk", ascending=False)
+
+
 def department_summary(df: pd.DataFrame, min_n: int = 20, strength: float = 20.0) -> pd.DataFrame:
     """Per-department (faculty + specialty) summary with shrunk quality ranking.
 

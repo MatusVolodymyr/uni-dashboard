@@ -28,17 +28,17 @@ st.caption(
 df_full = load()
 df_full, role, scope_faculty = access_control(df_full)
 
-with st.sidebar:
-    st.header("Фільтри")
+fc1, fc2, fc3 = st.columns(3)
+with fc1:
     faculties = ["Всі"] + sorted(df_full["faculty"].unique())
     sel_faculty = st.selectbox("Факультет", faculties)
-
+with fc2:
     if sel_faculty != "Всі":
         specs = ["Всі"] + sorted(df_full[df_full["faculty"] == sel_faculty]["specialty"].unique())
     else:
         specs = ["Всі"]
     sel_spec = st.selectbox("Спеціальність (Кафедра)", specs)
-
+with fc3:
     min_n = st.slider("Мін. відповідей на курс", 5, 50, 20, 5)
 
 df = df_full.copy()

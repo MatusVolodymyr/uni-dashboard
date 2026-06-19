@@ -37,10 +37,11 @@ st.caption(
     f"{unit.lower()} із малим n легко дає викривлену картину."
 )
 
-with st.sidebar:
-    st.header("Фільтри")
-    block_opts = {"Всі блоки": SCORE_COLS, "Дисципліна": Q01_COLS, "Лектор": Q03_COLS, "Практик": Q05_COLS}
+block_opts = {"Всі блоки": SCORE_COLS, "Дисципліна": Q01_COLS, "Лектор": Q03_COLS, "Практик": Q05_COLS}
+fc1, fc2 = st.columns(2)
+with fc1:
     sel_block = st.selectbox("Блок питань", list(block_opts.keys()))
+with fc2:
     min_n = st.slider(f"Мін. відповідей ({unit.lower()})", 5, 200, 20, 5)
 
 active_cols = block_opts[sel_block]

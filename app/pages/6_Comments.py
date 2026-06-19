@@ -23,33 +23,34 @@ df_full = load()
 df_full, role, scope_faculty = access_control(df_full)
 theme_cols = list(THEME_LABELS.keys())
 
-# ── Sidebar filters ───────────────────────────────────────────────────────────
-with st.sidebar:
-    st.header("Фільтри")
-
-    include_trivial = st.checkbox("Включати тривіальні", value=False,
-                                  help="Показати також короткі беззмістовні відповіді.")
-
+# ── Page controls ─────────────────────────────────────────────────────────────
+r1c1, r1c2, r1c3 = st.columns(3)
+with r1c1:
     faculties = ["Всі"] + sorted(df_full["faculty"].unique())
     sel_faculty = st.selectbox("Факультет", faculties)
-
+with r1c2:
     if sel_faculty != "Всі":
         courses = ["Всі"] + sorted(df_full[df_full["faculty"] == sel_faculty]["course"].unique())
     else:
         courses = ["Всі"]
     sel_course = st.selectbox("Курс", courses)
+with r1c3:
+    search = st.text_input("Пошук", placeholder="ключові слова...")
 
+r2c1, r2c2, r2c3 = st.columns([2, 2, 1])
+with r2c1:
     sentiments = st.multiselect(
         "Тональність", ["Негативний", "Нейтральний", "Позитивний"],
         default=["Негативний", "Нейтральний", "Позитивний"],
     )
-
+with r2c2:
     sel_themes = st.multiselect(
         "Теми", [THEME_LABELS[c] for c in theme_cols],
         help="Коментар може належати кільком темам.",
     )
-
-    search = st.text_input("Пошук", placeholder="ключові слова...")
+with r2c3:
+    include_trivial = st.checkbox("Включати тривіальні", value=False,
+                                  help="Показати також короткі беззмістовні відповіді.")
 
 # ── Base filter ───────────────────────────────────────────────────────────────
 base = df_full[df_full["has_comment"]].copy()
