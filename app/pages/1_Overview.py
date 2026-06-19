@@ -34,7 +34,7 @@ is_dean = scope_faculty is not None
 # When a dean is scoped to one faculty, drill structure is by Кафедра.
 group_col = "specialty" if is_dean else "faculty"
 group_name = "Кафедра" if is_dean else "Факультет"
-DEPT_LABEL = "Спеціальність (Кафедра)"
+DEPT_LABEL = "Спеціальність"
 
 # ── Page controls ────────────────────────────────────────────────────────────
 block_opts = {"Всі блоки": SCORE_COLS, "Дисципліна": Q01_COLS, "Лектор": Q03_COLS, "Практик": Q05_COLS}
@@ -88,7 +88,7 @@ k6.metric("З коментарем", f"{comment_rate:.1f}%")
 st.divider()
 
 # ── General data by faculty / department ─────────────────────────────────────
-st.subheader(f"Загальні дані за {'кафедрами' if is_dean else 'факультетами'}")
+st.subheader(f"Загальні дані за {'спеціальностями' if is_dean else 'факультетами'}")
 st.caption(
     "Зведена таблиця. **Лектори/Практики** показані у двох варіантах середньої: "
     "**за відповідями** (кожна відповідь студента важить однаково) та **за викладачами** "
