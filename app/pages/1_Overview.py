@@ -90,31 +90,25 @@ st.divider()
 # ── General data by faculty / department ─────────────────────────────────────
 st.subheader(f"Загальні дані за {'спеціальностями' if is_dean else 'факультетами'}")
 st.caption(
-    "Зведена таблиця. **Лектори/Практики** показані у двох варіантах середньої: "
-    "**за відповідями** (кожна відповідь студента важить однаково) та **за викладачами** "
-    "(кожен викладач важить однаково, незалежно від розміру групи). «Якість» — середня по "
+    "Зведена таблиця. **Лектори/Практики** — середня по відповідях відповідного блоку "
+    "(кожна відповідь студента важить однаково). «Якість» — середня по "
     "11 питаннях якості (без навантаження)."
 )
 
-gs = group_summary(df, group_col=group_col, teachers=teachers_scoped)
+gs = group_summary(df, group_col=group_col)
 cols_order = [group_col, "n"]
 if group_col == "faculty":
     cols_order += ["departments"]
-cols_order += ["courses", "avg_quality",
-               "lect_resp", "lect_tchr", "pract_resp", "pract_tchr",
-               "low_rate", "comment_rate"]
+cols_order += ["courses", "avg_quality", "lect", "pract", "low_rate", "comment_rate"]
 gs_disp = gs[cols_order].copy()
 rename = {
     group_col: (DEPT_LABEL if is_dean else group_name),
     "n": "Відповідей", "departments": "Спеціальностей", "courses": "Курсів",
-    "avg_quality": "Якість",
-    "lect_resp": "Лектори (за відп.)", "lect_tchr": "Лектори (за викл.)",
-    "pract_resp": "Практики (за відп.)", "pract_tchr": "Практики (за викл.)",
+    "avg_quality": "Якість", "lect": "Лектори", "pract": "Практики",
     "low_rate": "% ≤3", "comment_rate": "% коментарів",
 }
 gs_disp = gs_disp.rename(columns=rename)
-num_fmt = {c: "{:.2f}" for c in ["Якість", "Лектори (за відп.)", "Лектори (за викл.)",
-                                  "Практики (за відп.)", "Практики (за викл.)"]}
+num_fmt = {c: "{:.2f}" for c in ["Якість", "Лектори", "Практики"]}
 num_fmt.update({"% ≤3": "{:.1f}%", "% коментарів": "{:.1f}%"})
 st.dataframe(
     gs_disp.style.background_gradient(subset=["Якість"], cmap="RdYlGn", vmin=4.0, vmax=5.0)
@@ -124,23 +118,44 @@ st.dataframe(
     hide_index=True,
     height=min(560, 80 + 36 * len(gs_disp)),
 )
-exp1, exp2, _ = st.columns([1.1, 1.1, 4])
+# Report scope follows the current selection:
+#   dean                       → their faculty, broken down by specialty
+#   rector + specific faculty  → that faculty, broken down by specialty
+#   rector + "Всі"             → whole university, broken down by faculty
+if is_dean:
+    rpt_df = df_all[df_all["faculty"] == scope_faculty]
+    rpt_teachers = teachers_all[teachers_all["faculty"] == scope_faculty]
+    rpt_scope_label = f"Факультет: {scope_faculty}"
+    rpt_group_col, rpt_group_name, rpt_slug = "specialty", "Спеціальність", "fakultet"
+elif sel_faculty != "Всі":
+    rpt_df = df_all[df_all["faculty"] == sel_faculty]
+    rpt_teachers = teachers_all[teachers_all["faculty"] == sel_faculty]
+    rpt_scope_label = f"Факультет: {sel_faculty}"
+    rpt_group_col, rpt_group_name, rpt_slug = "specialty", "Спеціальність", "fakultet"
+else:
+    rpt_df = df_all
+    rpt_teachers = teachers_all
+    rpt_scope_label = "Університет (усі факультети)"
+    rpt_group_col, rpt_group_name, rpt_slug = "faculty", "Факультет", "universytet"
+
+exp1, exp2, _ = st.columns([1.1, 1.6, 4])
 with exp1:
     download_csv(gs_disp, f"general_by_{group_col}.csv", label="⬇️ Дані (CSV)", key="dl_general")
 with exp2:
-    scope_label = f"Факультет: {scope_faculty}" if is_dean else "Університет (усі факультети)"
-    if st.button("📄 Сформувати PDF-звіт", help="Зведений звіт із графіками та таблицями для друку / розсилки."):
+    btn_label = f"📄 PDF-звіт ({rpt_scope_label})"
+    if st.button(btn_label, help="Зведений звіт із графіками та таблицями для друку / розсилки. "
+                 "Для звіту по окремому факультету виберіть факультет у фільтрі вище."):
         with st.spinner("Формуємо звіт…"):
-            report_teachers = teachers_all if not is_dean else teachers_all[teachers_all["faculty"] == scope_faculty]
             uni_means = df_all[SCORE_COLS].mean()
-            pdf_bytes = build_summary_pdf(df_full, report_teachers, scope_label,
-                                          group_col, group_name, role, uni_means)
+            pdf_bytes = build_summary_pdf(rpt_df, rpt_teachers, rpt_scope_label,
+                                          rpt_group_col, rpt_group_name, role, uni_means)
         st.session_state["overview_pdf"] = pdf_bytes
+        st.session_state["overview_pdf_slug"] = rpt_slug
 if st.session_state.get("overview_pdf"):
     st.download_button(
         "⬇️ Завантажити PDF-звіт",
         data=st.session_state["overview_pdf"],
-        file_name=f"zvedenyi_zvit_{'specialnist' if is_dean else 'universytet'}.pdf",
+        file_name=f"zvedenyi_zvit_{st.session_state.get('overview_pdf_slug', 'universytet')}.pdf",
         mime="application/pdf",
         key="dl_pdf",
     )

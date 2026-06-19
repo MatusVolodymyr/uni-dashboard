@@ -110,23 +110,11 @@ def group_counts(df: pd.DataFrame, group_col: str) -> pd.Series:
     return df.groupby(group_col).size()
 
 
-def _teacher_weighted(teachers: pd.DataFrame, group_col: str, role: str, score_col: str) -> pd.Series:
-    """Average of per-teacher averages within each group (every teacher counts once).
-
-    Uses the canonical teacher long-table so co-teachers are counted individually.
-    """
-    sub = teachers[teachers["role"] == role]
-    per_teacher = sub.groupby([group_col, "teacher"])[score_col].mean()
-    return per_teacher.groupby(level=0).mean()
-
-
-def group_summary(df: pd.DataFrame, group_col: str = "faculty",
-                  teachers: pd.DataFrame = None) -> pd.DataFrame:
+def group_summary(df: pd.DataFrame, group_col: str = "faculty") -> pd.DataFrame:
     """General summary table grouped by faculty (or department).
 
-    Provides BOTH lecturer/practitioner averages:
-      *_resp  = response-weighted (each student response counts once)
-      *_tchr  = teacher-weighted  (each canonical teacher counts once) — needs `teachers`
+    Lecturer/practitioner columns are response-weighted (each student response
+    counts once).
     """
     df = df.copy()
     df["avg_quality"] = df[QUALITY_COLS].mean(axis=1)
@@ -136,19 +124,12 @@ def group_summary(df: pd.DataFrame, group_col: str = "faculty",
         n=("avg_overall", "count"),
         courses=("course", "nunique"),
         avg_quality=("avg_quality", "mean"),
-        lect_resp=("avg_lecturer", "mean"),
-        pract_resp=("avg_practitioner", "mean"),
+        lect=("avg_lecturer", "mean"),
+        pract=("avg_practitioner", "mean"),
         comment_rate=("comment_useful", "mean"),
     )
     if group_col == "faculty":
         out["departments"] = g["specialty"].nunique()
-
-    if teachers is not None:
-        out["lect_tchr"] = _teacher_weighted(teachers, group_col, "Лектор", "avg_lecturer")
-        out["pract_tchr"] = _teacher_weighted(teachers, group_col, "Практик", "avg_practitioner")
-    else:
-        out["lect_tchr"] = pd.NA
-        out["pract_tchr"] = pd.NA
 
     low = df[df["avg_overall"] <= 3].groupby(group_col).size()
     out["low_rate"] = (low / out["n"] * 100).fillna(0)

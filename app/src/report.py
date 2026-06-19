@@ -219,22 +219,22 @@ def build_summary_pdf(df, teachers, scope_label, group_col, group_name,
         # ── Page 2: Підрозділи + heatmap ──────────────────────────────────────
         fig = plt.figure(figsize=A4)
         _title(fig, f"Дані за {units_word}", scope_label)
-        gs = group_summary(df, group_col=group_col, teachers=teachers)
-        cols = [group_col, "n", "courses", "avg_quality", "lect_resp", "lect_tchr",
-                "pract_resp", "pract_tchr", "low_rate", "comment_rate"]
+        gs = group_summary(df, group_col=group_col)
+        cols = [group_col, "n", "courses", "avg_quality", "lect",
+                "pract", "low_rate", "comment_rate"]
         t = gs[cols].head(24).copy()
         t[group_col] = t[group_col].astype(str).str.slice(0, 32)
-        for c in ("avg_quality", "lect_resp", "lect_tchr", "pract_resp", "pract_tchr"):
+        for c in ("avg_quality", "lect", "pract"):
             t[c] = pd.to_numeric(t[c], errors="coerce").map(lambda v: f"{v:.2f}" if pd.notna(v) else "—")
         t["low_rate"] = t["low_rate"].map(lambda v: f"{v:.1f}%")
         t["comment_rate"] = t["comment_rate"].map(lambda v: f"{v:.1f}%")
         t = t.rename(columns={
             group_col: group_name, "n": "Відп.", "courses": "Курс.", "avg_quality": "Якість",
-            "lect_resp": "Лек.(в)", "lect_tchr": "Лек.(т)", "pract_resp": "Пр.(в)",
-            "pract_tchr": "Пр.(т)", "low_rate": "% ≤3", "comment_rate": "% ком.",
+            "lect": "Лектори", "pract": "Практики",
+            "low_rate": "% ≤3", "comment_rate": "% ком.",
         })
         _table(fig.add_axes([0.03, 0.50, 0.94, 0.40]), t,
-               title=f"Загальні дані за {units_word}  (в=за відповідями, т=за викладачами)", fontsize=6)
+               title=f"Загальні дані за {units_word}", fontsize=6.5, first_col_w=0.30)
         pivot = group_question_means(df, group_col)
         _heatmap_ax(fig.add_axes([0.18, 0.06, 0.72, 0.36]), pivot, uni_means.rename(QUESTION_LABELS))
         pdf.savefig(fig); plt.close(fig)
